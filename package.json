@@ -1,8 +1,41 @@
 {
+  "name": "heliosuite",
+  "version": "1.0.0",
+  "description": "AI-powered SaaS platform for solar installation companies",
+  "main": "index.js",
+  "scripts": {
+    "dev": "npm run dev:web",
+    "dev:web": "cd web && npm run dev",
+    "dev:mobile": "cd mobile && expo start",
+    "build": "npm run build:web && npm run build:functions",
+    "build:web": "cd web && npm run build",
+    "build:functions": "cd functions && npm run build",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
+    "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
+    "deploy": "firebase deploy",
+    "deploy:hosting": "firebase deploy --only hosting",
+    "deploy:functions": "firebase deploy --only functions",
+    "emulators": "firebase emulators:start",
+    "setup": "npm install && cd web && npm install && cd ../mobile && npm install && cd ../functions && npm install"
+  },
+  "keywords": ["solar", "saas", "ai", "crm", "firebase", "react", "react-native"],
+  "author": "HelioSuite Team",
+  "license": "MIT",
   "dependencies": {
-    "firebase": "^12.0.0"
+    "firebase": "^8.10.1"
   },
   "devDependencies": {
-    "firebase-tools": "^14.11.1"
-  }
+    "@typescript-eslint/eslint-plugin": "^5.62.0",
+    "@typescript-eslint/parser": "^5.62.0",
+    "eslint": "^8.57.0",
+    "prettier": "^2.8.8",
+    "typescript": "^4.9.5"
+  },
+  "workspaces": [
+    "web",
+    "mobile",
+    "functions"
+  ]
 }
