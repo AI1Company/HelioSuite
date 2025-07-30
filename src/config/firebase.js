@@ -1,9 +1,9 @@
-// Firebase v8 SDK
-import firebase from 'firebase/app';
-import 'firebase/auth';
-import 'firebase/firestore';
-import 'firebase/storage';
-import 'firebase/functions';
+// Firebase v9 Modular SDK
+import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
+import { getFunctions } from 'firebase/functions';
 
 // Firebase configuration
 const firebaseConfig = {
@@ -16,17 +16,15 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
-}
+const app = initializeApp(firebaseConfig);
 
 // Initialize Firebase services
-export const auth = firebase.auth();
-export const db = firebase.firestore();
-export const storage = firebase.storage();
-export const functions = firebase.functions();
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+export const storage = getStorage(app);
+export const functions = getFunctions(app);
 
-export default firebase;
+export default app;
 
 // Demo user credentials (for reference)
 export const DEMO_USER = {

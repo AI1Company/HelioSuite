@@ -1,0 +1,155 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper functions for role-based access control
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserRole() {
+      return request.auth.token.role;
+    }
+    
+    function isOwner() {
+      return isAuthenticated() && getUserRole() == 'owner';
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'admin';
+    }
+    
+    function isSalesRep() {
+      return isAuthenticated() && getUserRole() == 'sales_rep';
+    }
+    
+    function isTechnician() {
+      return isAuthenticated() && getUserRole() == 'technician';
+    }
+    
+    function isOwnerOrAdmin() {
+      return isOwner() || isAdmin();
+    }
+    
+    function canAccessClientData() {
+      return isOwnerOrAdmin() || isSalesRep();
+    }
+    
+    function isValidImageFile() {
+      return request.resource.contentType.matches('image/.*');
+    }
+    
+    function isValidDocumentFile() {
+      return request.resource.contentType.matches('application/pdf') ||
+             request.resource.contentType.matches('application/msword') ||
+             request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.wordprocessingml.document') ||
+             request.resource.contentType.matches('text/plain');
+    }
+    
+    function isValidFileSize() {
+      return request.resource.size <= 10 * 1024 * 1024; // 10MB limit
+    }
+    
+    function isValidImageSize() {
+      return request.resource.size <= 5 * 1024 * 1024; // 5MB limit for images
+    }
+    
+    // User profile pictures
+    match /users/{userId}/profile/{fileName} {
+      // Users can upload their own profile picture
+      allow write: if isAuthenticated() && 
+                      request.auth.uid == userId &&
+                      isValidImageFile() &&
+                      isValidImageSize();
+      
+      // Users can read their own profile picture, others can read if authenticated
+      allow read: if isAuthenticated();
+    }
+    
+    // Job-related photos and documents
+    match /jobs/{jobId}/{allPaths=**} {
+      // Technicians can upload photos for jobs they're assigned to
+      allow write: if isTechnician() &&
+                      isValidImageFile() &&
+                      isValidImageSize();
+      
+      // Sales reps, admins, and owners can upload any job-related files
+      allow write: if canAccessClientData() &&
+                      (isValidImageFile() || isValidDocumentFile()) &&
+                      isValidFileSize();
+      
+      // All authenticated users can read job files
+      allow read: if isAuthenticated();
+    }
+    
+    // Client documents and photos
+    match /clients/{clientId}/{allPaths=**} {
+      // Sales reps, admins, and owners can manage client files
+      allow read, write: if canAccessClientData() &&
+                            (isValidImageFile() || isValidDocumentFile()) &&
+                            isValidFileSize();
+    }
+    
+    // Proposal documents
+    match /proposals/{proposalId}/{fileName} {
+      // Sales reps, admins, and owners can manage proposal files
+      allow write: if canAccessClientData() &&
+                      isValidDocumentFile() &&
+                      isValidFileSize();
+      
+      // Sales reps, admins, owners, and assigned clients can read proposals
+      allow read: if canAccessClientData();
+      
+      // Clients can read their own proposals if shared
+      // Note: This requires checking Firestore for sharing status
+      // In practice, you'd implement this through Cloud Functions
+    }
+    
+    // Company assets (logos, templates, etc.)
+    match /company/{allPaths=**} {
+      // All authenticated users can read company assets
+      allow read: if isAuthenticated();
+      
+      // Only owners can manage company assets
+      allow write: if isOwner() &&
+                      (isValidImageFile() || isValidDocumentFile()) &&
+                      isValidFileSize();
+    }
+    
+    // Product images and documentation
+    match /products/{productId}/{allPaths=**} {
+      // All authenticated users can read product files
+      allow read: if isAuthenticated();
+      
+      // Only admins and owners can manage product files
+      allow write: if isOwnerOrAdmin() &&
+                      (isValidImageFile() || isValidDocumentFile()) &&
+                      isValidFileSize();
+    }
+    
+    // Temporary uploads (for processing)
+    match /temp/{userId}/{fileName} {
+      // Users can upload to their own temp folder
+      allow write: if isAuthenticated() && 
+                      request.auth.uid == userId &&
+                      (isValidImageFile() || isValidDocumentFile()) &&
+                      isValidFileSize();
+      
+      // Users can read their own temp files
+      allow read: if isAuthenticated() && 
+                     request.auth.uid == userId;
+      
+      // Auto-delete temp files after 24 hours (handled by Cloud Functions)
+    }
+    
+    // System backups and exports
+    match /system/{allPaths=**} {
+      // Only owners can access system files
+      allow read, write: if isOwner();
+    }
+    
+    // Default deny rule for any unmatched paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

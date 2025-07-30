@@ -1,0 +1,178 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions for role-based access control
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserRole() {
+      return request.auth.token.role;
+    }
+    
+    function isOwner() {
+      return isAuthenticated() && getUserRole() == 'owner';
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'admin';
+    }
+    
+    function isSalesRep() {
+      return isAuthenticated() && getUserRole() == 'sales_rep';
+    }
+    
+    function isTechnician() {
+      return isAuthenticated() && getUserRole() == 'technician';
+    }
+    
+    function isOwnerOrAdmin() {
+      return isOwner() || isAdmin();
+    }
+    
+    function canManageUsers() {
+      return isOwnerOrAdmin();
+    }
+    
+    function canAccessClientData() {
+      return isOwnerOrAdmin() || isSalesRep();
+    }
+    
+    function canAccessJobData() {
+      return isAuthenticated(); // All authenticated users can access jobs
+    }
+    
+    function isResourceOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Users collection - user profile management
+    match /users/{userId} {
+      // Users can read their own profile, admins can read all
+      allow read: if isResourceOwner(userId) || canManageUsers();
+      
+      // Users can update their own profile (except role), admins can update all
+      allow update: if (isResourceOwner(userId) && 
+                       !('role' in request.resource.data.diff(resource.data).affectedKeys())) ||
+                      canManageUsers();
+      
+      // Only admins can create/delete users
+      allow create, delete: if canManageUsers();
+    }
+    
+    // Clients collection - customer/lead management
+    match /clients/{clientId} {
+      // Sales reps, admins, and owners can access client data
+      allow read, write: if canAccessClientData();
+      
+      // Technicians can read client data for assigned jobs
+      allow read: if isTechnician() && 
+                     exists(/databases/$(database)/documents/jobs/$(clientId + '_' + request.auth.uid));
+    }
+    
+    // Jobs collection - project management
+    match /jobs/{jobId} {
+      // All authenticated users can read jobs
+      allow read: if canAccessJobData();
+      
+      // Sales reps, admins, and owners can create/update jobs
+      allow create, update: if canAccessClientData();
+      
+      // Technicians can update job status and add field notes
+      allow update: if isTechnician() && 
+                       resource.data.assignedTechnician == request.auth.uid &&
+                       // Only allow updates to specific fields
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+                         ['status', 'fieldNotes', 'photos', 'completionDate', 'updatedAt']
+                       );
+      
+      // Only admins and owners can delete jobs
+      allow delete: if isOwnerOrAdmin();
+    }
+    
+    // Proposals collection - AI-generated proposals
+    match /proposals/{proposalId} {
+      // Sales reps, admins, and owners can access proposals
+      allow read, write: if canAccessClientData();
+      
+      // Clients can read their own proposals (if shared)
+      allow read: if resource.data.clientId == request.auth.uid && resource.data.shared == true;
+    }
+    
+    // Products collection - solar equipment catalog
+    match /products/{productId} {
+      // All authenticated users can read products
+      allow read: if isAuthenticated();
+      
+      // Only admins and owners can manage products
+      allow write: if isOwnerOrAdmin();
+    }
+    
+    // Leads collection - potential customer tracking
+    match /leads/{leadId} {
+      // Sales reps, admins, and owners can access leads
+      allow read, write: if canAccessClientData();
+    }
+    
+    // Activity logs - audit trail
+    match /activity_logs/{logId} {
+      // All authenticated users can create activity logs
+      allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid;
+      
+      // Only admins and owners can read activity logs
+      allow read: if isOwnerOrAdmin();
+      
+      // No updates or deletes allowed for audit integrity
+      allow update, delete: if false;
+    }
+    
+    // Company settings - configuration data
+    match /company_settings/{settingId} {
+      // All authenticated users can read company settings
+      allow read: if isAuthenticated();
+      
+      // Only owners can update company settings
+      allow write: if isOwner();
+    }
+    
+    // Notifications collection
+    match /notifications/{notificationId} {
+      // Users can read their own notifications
+      allow read: if isAuthenticated() && 
+                     resource.data.userId == request.auth.uid;
+      
+      // System can create notifications, users can mark as read
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && 
+                       resource.data.userId == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
+      
+      // Users can delete their own notifications
+      allow delete: if isAuthenticated() && 
+                       resource.data.userId == request.auth.uid;
+    }
+    
+    // File metadata collection - for Firebase Storage integration
+    match /file_metadata/{fileId} {
+      // Users can read metadata for files they have access to
+      allow read: if isAuthenticated() && 
+                     (resource.data.uploadedBy == request.auth.uid || 
+                      canAccessClientData() ||
+                      (isTechnician() && resource.data.jobId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.assignedJobs));
+      
+      // Users can create metadata for files they upload
+      allow create: if isAuthenticated() && 
+                       request.resource.data.uploadedBy == request.auth.uid;
+      
+      // Only file owner or admins can update/delete
+      allow update, delete: if isAuthenticated() && 
+                               (resource.data.uploadedBy == request.auth.uid || isOwnerOrAdmin());
+    }
+    
+    // Default deny rule for any unmatched documents
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
