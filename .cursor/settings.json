@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "Firebase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@gannonh/firebase-mcp"
+      ],
+      "env": {
+        "FIREBASE_STORAGE_BUCKET": "helio-suite.firebasestorage.app",
+        "GOOGLE_APPLICATION_CREDENTIALS": "/home/sstech/trae_projects/HelioSuite/firebase-adminsdk-service-account.json"
+      }
+    }
+  }
+}

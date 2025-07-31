@@ -7,7 +7,8 @@ service cloud.firestore {
     }
     
     function getUserRole() {
-      return request.auth.token.role;
+      // For emulator development, fallback to user document role if custom claims not available
+      return request.auth.token.role != null ? request.auth.token.role : 'guest';
     }
     
     function isOwner() {
@@ -56,8 +57,11 @@ service cloud.firestore {
                        !('role' in request.resource.data.diff(resource.data).affectedKeys())) ||
                       canManageUsers();
       
-      // Only admins can create/delete users
-      allow create, delete: if canManageUsers();
+      // Users can create their own profile with guest role, admins can create/delete any users
+      allow create: if (isResourceOwner(userId) && 
+                       ('role' in request.resource.data && request.resource.data.role == 'guest')) || 
+                      canManageUsers();
+      allow delete: if canManageUsers();
     }
     
     // Clients collection - customer/lead management

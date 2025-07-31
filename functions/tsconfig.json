@@ -13,6 +13,7 @@
     "resolveJsonModule": true,
     "declaration": true,
     "declarationMap": true,
+    "composite": true,
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
@@ -21,8 +22,7 @@
   },
   "compileOnSave": true,
   "include": [
-    "src/**/*",
-    "../shared/**/*"
+    "src/**/*"
   ],
   "exclude": [
     "node_modules",
